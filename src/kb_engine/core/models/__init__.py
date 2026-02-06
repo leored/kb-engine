@@ -3,7 +3,13 @@
 from kb_engine.core.models.document import Chunk, Document
 from kb_engine.core.models.embedding import Embedding
 from kb_engine.core.models.graph import Edge, EdgeType, Node, NodeType
-from kb_engine.core.models.search import SearchFilters, SearchResult
+from kb_engine.core.models.repository import RepositoryConfig
+from kb_engine.core.models.search import (
+    DocumentReference,
+    RetrievalMode,
+    RetrievalResponse,
+    SearchFilters,
+)
 
 __all__ = [
     "Document",
@@ -14,5 +20,8 @@ __all__ = [
     "NodeType",
     "EdgeType",
     "SearchFilters",
-    "SearchResult",
+    "DocumentReference",
+    "RetrievalResponse",
+    "RetrievalMode",
+    "RepositoryConfig",
 ]

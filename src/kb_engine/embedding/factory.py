@@ -26,6 +26,7 @@ class EmbeddingProviderFactory:
 
             return LocalEmbeddingProvider(
                 model_path=self._config.local_model_path,
+                model_name=self._config.local_model_name,
             )
         else:
             raise ValueError(f"Unknown embedding provider: {provider}")

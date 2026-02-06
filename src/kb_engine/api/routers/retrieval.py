@@ -1,22 +1,22 @@
-"""Inference API endpoints."""
+"""Retrieval API endpoints."""
 
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
-from kb_engine.api.dependencies import InferenceServiceDep
-from kb_engine.core.models.search import RetrievalMode, SearchFilters, SearchResponse
+from kb_engine.api.dependencies import RetrievalServiceDep
+from kb_engine.core.models.search import RetrievalMode, RetrievalResponse, SearchFilters
 
-router = APIRouter(prefix="/inference")
+router = APIRouter(prefix="/retrieval")
 
 
-class SearchRequest(BaseModel):
-    """Request model for search endpoint."""
+class RetrievalRequest(BaseModel):
+    """Request model for retrieval endpoint."""
 
     query: str = Field(..., min_length=1, max_length=1000, description="Search query")
     mode: RetrievalMode = Field(
-        default=RetrievalMode.HYBRID, description="Retrieval mode"
+        default=RetrievalMode.VECTOR, description="Retrieval mode"
     )
     limit: int = Field(default=10, ge=1, le=100, description="Max results")
     score_threshold: float | None = Field(
@@ -25,12 +25,12 @@ class SearchRequest(BaseModel):
     filters: SearchFilters | None = Field(default=None, description="Search filters")
 
 
-@router.post("/search", response_model=SearchResponse)
+@router.post("/search", response_model=RetrievalResponse)
 async def search(
-    request: SearchRequest,
-    service: InferenceServiceDep,
-) -> SearchResponse:
-    """Execute a search query against the knowledge base."""
+    request: RetrievalRequest,
+    service: RetrievalServiceDep,
+) -> RetrievalResponse:
+    """Search the knowledge base and return document references with URLs."""
     return await service.search(
         query=request.query,
         mode=request.mode,
@@ -40,14 +40,14 @@ async def search(
     )
 
 
-@router.get("/search", response_model=SearchResponse)
+@router.get("/search", response_model=RetrievalResponse)
 async def search_get(
-    service: InferenceServiceDep,
+    service: RetrievalServiceDep,
     query: Annotated[str, Query(min_length=1, max_length=1000)],
-    mode: RetrievalMode = RetrievalMode.HYBRID,
+    mode: RetrievalMode = RetrievalMode.VECTOR,
     limit: Annotated[int, Query(ge=1, le=100)] = 10,
-) -> SearchResponse:
-    """Execute a search query (GET variant for simple queries)."""
+) -> RetrievalResponse:
+    """Search the knowledge base (GET variant for simple queries)."""
     return await service.search(
         query=query,
         mode=mode,

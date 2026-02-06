@@ -1,6 +1,7 @@
 """Application settings using Pydantic Settings."""
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -19,12 +20,21 @@ class Settings(BaseSettings):
     debug: bool = True
     log_level: str = "INFO"
 
+    # Profile: "local" (SQLite+ChromaDB) or "server" (PostgreSQL+Qdrant+Neo4j)
+    profile: str = "local"
+
     # API
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     api_workers: int = 1
 
-    # PostgreSQL
+    # --- Traceability store ---
+    traceability_store: str = "sqlite"  # "sqlite" | "postgres"
+
+    # SQLite (local profile)
+    sqlite_path: str = "~/.kb-engine/kb.db"
+
+    # PostgreSQL (server profile)
     postgres_host: str = "localhost"
     postgres_port: int = 5432
     postgres_user: str = "kb_engine"
@@ -32,31 +42,30 @@ class Settings(BaseSettings):
     postgres_db: str = "kb_engine"
     database_url: str | None = None
 
-    # Vector Store
-    vector_store: str = "qdrant"
+    # --- Vector store ---
+    vector_store: str = "chroma"  # "chroma" | "qdrant"
 
-    # Qdrant
+    # ChromaDB (local profile)
+    chroma_path: str = "~/.kb-engine/chroma"
+
+    # Qdrant (server profile)
     qdrant_host: str = "localhost"
     qdrant_port: int = 6333
     qdrant_grpc_port: int = 6334
     qdrant_api_key: str | None = None
     qdrant_collection: str = "kb_engine_embeddings"
 
-    # Weaviate (alternative)
-    weaviate_host: str = "localhost"
-    weaviate_api_key: str | None = None
+    # --- Graph store ---
+    graph_store: str = "sqlite"  # "sqlite" | "neo4j" | "none"
 
-    # Graph Store
-    graph_store: str = "neo4j"
-
-    # Neo4j
+    # Neo4j (server profile)
     neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"
     neo4j_password: str = "changeme"
 
-    # Nebula (alternative)
-    nebula_host: str = "localhost"
-    nebula_port: int = 9669
+    # --- Embeddings (independent of profile) ---
+    embedding_provider: str = "local"  # "local" | "openai"
+    local_embedding_model: str = "all-MiniLM-L6-v2"
 
     # OpenAI
     openai_api_key: str | None = None
@@ -70,17 +79,20 @@ class Settings(BaseSettings):
     chunk_overlap: int = 50
 
     # Extraction
-    extraction_use_llm: bool = True
+    extraction_use_llm: bool = False
     extraction_confidence_threshold: float = 0.7
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        # Build database URL if not provided
-        if self.database_url is None:
+        # Build database URL if not provided (server profile)
+        if self.database_url is None and self.traceability_store == "postgres":
             self.database_url = (
                 f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
                 f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
             )
+        # Resolve sqlite path
+        self.sqlite_path = str(Path(self.sqlite_path).expanduser())
+        self.chroma_path = str(Path(self.chroma_path).expanduser())
 
     @property
     def is_production(self) -> bool:
@@ -89,6 +101,10 @@ class Settings(BaseSettings):
     @property
     def is_development(self) -> bool:
         return self.environment.lower() == "development"
+
+    @property
+    def is_local_profile(self) -> bool:
+        return self.profile.lower() == "local"
 
 
 @lru_cache

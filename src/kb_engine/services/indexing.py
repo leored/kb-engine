@@ -2,8 +2,9 @@
 
 from uuid import UUID
 
-from kb_engine.core.exceptions import DocumentNotFoundError, DuplicateDocumentError
-from kb_engine.core.models.document import Document, DocumentStatus
+from kb_engine.core.exceptions import DocumentNotFoundError
+from kb_engine.core.models.document import Document
+from kb_engine.core.models.repository import RepositoryConfig
 from kb_engine.core.models.search import SearchFilters
 from kb_engine.pipelines.indexation import IndexationPipeline
 
@@ -34,7 +35,6 @@ class IndexingService:
             tags=tags or [],
             metadata=metadata or {},
         )
-
         return await self._pipeline.index_document(document)
 
     async def reindex_document(self, document_id: UUID) -> Document:
@@ -45,7 +45,6 @@ class IndexingService:
                 f"Document not found: {document_id}",
                 details={"document_id": str(document_id)},
             )
-
         return await self._pipeline.reindex_document(document)
 
     async def delete_document(self, document_id: UUID) -> bool:
@@ -56,7 +55,6 @@ class IndexingService:
                 f"Document not found: {document_id}",
                 details={"document_id": str(document_id)},
             )
-
         return await self._pipeline.delete_document(document)
 
     async def get_document(self, document_id: UUID) -> Document:
@@ -81,3 +79,11 @@ class IndexingService:
             limit=limit,
             offset=offset,
         )
+
+    async def index_repository(self, repo_config: RepositoryConfig) -> list[Document]:
+        """Index all matching files from a Git repository."""
+        return await self._pipeline.index_repository(repo_config)
+
+    async def sync_repository(self, repo_config: RepositoryConfig, since_commit: str) -> dict:
+        """Incrementally sync a repository."""
+        return await self._pipeline.sync_repository(repo_config, since_commit)

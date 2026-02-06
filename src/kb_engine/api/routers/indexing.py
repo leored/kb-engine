@@ -13,6 +13,8 @@ from kb_engine.core.models.document import Document, DocumentStatus
 router = APIRouter(prefix="/indexing")
 
 
+# --- Request/Response models ---
+
 class IndexDocumentRequest(BaseModel):
     """Request model for indexing a document."""
 
@@ -35,10 +37,50 @@ class DocumentResponse(BaseModel):
     external_id: str | None
     domain: str | None
     tags: list[str]
+    repo_name: str | None = None
+    relative_path: str | None = None
 
     class Config:
         from_attributes = True
 
+
+class RegisterRepositoryRequest(BaseModel):
+    """Request to register a Git repository for indexing."""
+
+    name: str = Field(..., min_length=1, max_length=255)
+    local_path: str = Field(..., min_length=1)
+    remote_url: str | None = None
+    branch: str = "main"
+    include_patterns: list[str] = Field(default_factory=lambda: ["**/*.md"])
+    exclude_patterns: list[str] = Field(default_factory=list)
+    base_url_template: str | None = None
+
+
+class SyncRepositoryRequest(BaseModel):
+    """Request to sync a repository from a specific commit."""
+
+    since_commit: str = Field(..., min_length=7, max_length=40)
+
+
+class RepositoryIndexResult(BaseModel):
+    """Result of a repository indexing operation."""
+
+    repo_name: str
+    documents_indexed: int
+    status: str = "completed"
+
+
+class RepositorySyncResult(BaseModel):
+    """Result of a repository sync operation."""
+
+    repo_name: str
+    commit: str
+    indexed: int
+    deleted: int
+    skipped: int
+
+
+# --- Document endpoints ---
 
 @router.post("/documents", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 async def index_document(
@@ -120,4 +162,70 @@ async def list_documents(
         filters=filters,
         limit=limit,
         offset=offset,
+    )
+
+
+# --- Repository endpoints ---
+
+@router.post(
+    "/repositories",
+    response_model=RepositoryIndexResult,
+    status_code=status.HTTP_201_CREATED,
+)
+async def register_and_index_repository(
+    request: RegisterRepositoryRequest,
+    service: IndexingServiceDep,
+) -> RepositoryIndexResult:
+    """Register a Git repository and index all matching files."""
+    from kb_engine.core.models.repository import RepositoryConfig
+
+    config = RepositoryConfig(
+        name=request.name,
+        local_path=request.local_path,
+        remote_url=request.remote_url,
+        branch=request.branch,
+        include_patterns=request.include_patterns,
+        exclude_patterns=request.exclude_patterns,
+        base_url_template=request.base_url_template,
+    )
+
+    documents = await service.index_repository(config)
+    return RepositoryIndexResult(
+        repo_name=request.name,
+        documents_indexed=len(documents),
+    )
+
+
+@router.post(
+    "/repositories/{name}/sync",
+    response_model=RepositorySyncResult,
+)
+async def sync_repository(
+    name: str,
+    request: SyncRepositoryRequest,
+    service: IndexingServiceDep,
+) -> RepositorySyncResult:
+    """Incrementally sync a repository (only changed files)."""
+    from kb_engine.core.models.repository import RepositoryConfig
+
+    # For now, the caller must provide the full config
+    # In a future version, we'd store repo configs in the DB
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Repository sync via API requires stored repo config. Use the CLI instead.",
+    )
+
+
+@router.post(
+    "/repositories/{name}/reindex",
+    response_model=RepositoryIndexResult,
+)
+async def reindex_repository(
+    name: str,
+    service: IndexingServiceDep,
+) -> RepositoryIndexResult:
+    """Full reindex of a repository."""
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Repository reindex via API requires stored repo config. Use the CLI instead.",
     )

@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from kb_engine import __version__
-from kb_engine.api.routers import admin, curation, health, indexing, inference
+from kb_engine.api.routers import admin, curation, health, indexing, retrieval
 from kb_engine.config import get_settings
 from kb_engine.config.logging import configure_logging
 
@@ -21,15 +21,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         json_logs=settings.is_production,
     )
 
-    # TODO: Initialize repositories and services
-    # app.state.repo_factory = RepositoryFactory(settings)
-    # app.state.indexing_service = ...
-    # app.state.inference_service = ...
+    # Services are lazily initialized on first request via dependencies
 
     yield
 
     # Cleanup
-    # await app.state.repo_factory.close()
+    if hasattr(app.state, "repo_factory"):
+        await app.state.repo_factory.close()
 
 
 def create_app() -> FastAPI:
@@ -38,7 +36,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="KB-Engine",
-        description="A hybrid RAG system for knowledge base management",
+        description="Intelligent document retrieval system",
         version=__version__,
         docs_url="/docs" if settings.is_development else None,
         redoc_url="/redoc" if settings.is_development else None,
@@ -56,7 +54,7 @@ def create_app() -> FastAPI:
 
     # Include routers
     app.include_router(health.router, tags=["Health"])
-    app.include_router(inference.router, prefix="/api/v1", tags=["Inference"])
+    app.include_router(retrieval.router, prefix="/api/v1", tags=["Retrieval"])
     app.include_router(indexing.router, prefix="/api/v1", tags=["Indexing"])
     app.include_router(curation.router, prefix="/api/v1", tags=["Curation"])
     app.include_router(admin.router, prefix="/api/v1", tags=["Admin"])

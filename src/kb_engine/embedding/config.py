@@ -7,7 +7,7 @@ class EmbeddingConfig(BaseModel):
     """Configuration for embedding generation."""
 
     # Provider selection
-    provider: str = Field(default="openai", description="Embedding provider (openai, local)")
+    provider: str = Field(default="local", description="Embedding provider (openai, local)")
 
     # OpenAI settings
     openai_model: str = Field(
@@ -18,8 +18,11 @@ class EmbeddingConfig(BaseModel):
     )
 
     # Local model settings
+    local_model_name: str = Field(
+        default="all-MiniLM-L6-v2", description="Sentence-transformers model name"
+    )
     local_model_path: str | None = Field(
-        default=None, description="Path to local embedding model"
+        default=None, description="Path to local embedding model (overrides name)"
     )
 
     # Batch settings

@@ -12,7 +12,7 @@ class ExtractionConfig(BaseModel):
 
     # Extraction behavior
     use_llm: bool = Field(
-        default=True, description="Use LLM for extraction (vs. pattern-only)"
+        default=False, description="Use LLM for extraction (vs. pattern-only)"
     )
     confidence_threshold: float = Field(
         default=0.7, ge=0.0, le=1.0, description="Minimum confidence for extracted entities"
@@ -26,7 +26,7 @@ class ExtractionConfig(BaseModel):
         default=True, description="Extract entities using patterns"
     )
     enable_llm_extraction: bool = Field(
-        default=True, description="Extract entities using LLM"
+        default=False, description="Extract entities using LLM"
     )
 
     # LLM settings

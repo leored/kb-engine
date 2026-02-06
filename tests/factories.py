@@ -47,9 +47,9 @@ class EmbeddingFactory(factory.Factory):
     id = factory.LazyFunction(uuid4)
     chunk_id = factory.LazyFunction(uuid4)
     document_id = factory.LazyFunction(uuid4)
-    vector = factory.LazyFunction(lambda: [0.1] * 1536)
-    model = "text-embedding-3-small"
-    dimensions = 1536
+    vector = factory.LazyFunction(lambda: [0.1] * 384)
+    model = "all-MiniLM-L6-v2"
+    dimensions = 384
 
 
 class NodeFactory(factory.Factory):

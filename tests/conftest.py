@@ -39,6 +39,8 @@ A user in the system.
         domain="test",
         tags=["test", "sample"],
         status=DocumentStatus.PENDING,
+        repo_name="test-repo",
+        relative_path="test/document.md",
     )
 
 
@@ -52,6 +54,7 @@ def sample_chunk(sample_document: Document) -> Chunk:
         chunk_type=ChunkType.ENTITY,
         sequence=0,
         heading_path=["Test Document", "Entity: User"],
+        section_anchor="entity-user",
     )
 
 

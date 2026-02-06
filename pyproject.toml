@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kb-engine"
-version = "0.1.0"
-description = "A hybrid RAG system for knowledge base management"
+version = "0.2.0"
+description = "Intelligent document retrieval system"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
@@ -23,22 +23,27 @@ classifiers = [
 dependencies = [
     "fastapi>=0.109.0",
     "uvicorn[standard]>=0.27.0",
-    "asyncpg>=0.29.0",
-    "sqlalchemy[asyncio]>=2.0",
-    "alembic>=1.13.0",
-    "qdrant-client>=1.7.0",
-    "neo4j>=5.16.0",
-    "llama-index>=0.10.0",
-    "tiktoken>=0.5.0",
-    "openai>=1.10.0",
     "pydantic>=2.5.0",
     "pydantic-settings>=2.1.0",
     "python-frontmatter>=1.0.0",
     "httpx>=0.26.0",
     "structlog>=24.1.0",
+    # Local profile (always available)
+    "aiosqlite>=0.19.0",
+    "chromadb>=0.4.0",
+    "sentence-transformers>=2.3.0",
+    "click>=8.0",
 ]
 
 [project.optional-dependencies]
+server = [
+    "asyncpg>=0.29.0",
+    "sqlalchemy[asyncio]>=2.0",
+    "alembic>=1.13.0",
+    "qdrant-client>=1.7.0",
+    "neo4j>=5.16.0",
+    "openai>=1.10.0",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
@@ -47,12 +52,12 @@ dev = [
     "mypy>=1.8.0",
     "pre-commit>=3.6.0",
     "factory-boy>=3.3.0",
-    "testcontainers>=3.7.0",
     "httpx>=0.26.0",
 ]
 
 [project.scripts]
 kb-engine = "kb_engine.api.main:run"
+kb = "kb_engine.cli:cli"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/kb_engine"]
@@ -105,8 +110,9 @@ plugins = ["pydantic.mypy"]
 module = [
     "neo4j.*",
     "qdrant_client.*",
-    "llama_index.*",
     "frontmatter.*",
+    "chromadb.*",
+    "sentence_transformers.*",
 ]
 ignore_missing_imports = true
 

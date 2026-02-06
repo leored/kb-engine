@@ -17,7 +17,7 @@ class TestExtractionConfig:
         """Test default configuration values."""
         config = ExtractionConfig()
 
-        assert config.use_llm is True
+        assert config.use_llm is False
         assert config.confidence_threshold == 0.7
         assert config.enable_frontmatter_extraction is True
         assert config.enable_pattern_extraction is True

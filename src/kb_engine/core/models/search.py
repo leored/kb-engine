@@ -1,13 +1,16 @@
 """Search-related models."""
 
+from __future__ import annotations
+
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from kb_engine.core.models.document import Chunk
+if TYPE_CHECKING:
+    from kb_engine.core.models.document import Chunk
 
 
 class RetrievalMode(str, Enum):
@@ -36,40 +39,35 @@ class SearchFilters(BaseModel):
     # Metadata filters (key-value pairs)
     metadata: dict[str, Any] | None = None
 
-    # Graph filters
-    node_types: list[str] | None = None
-    max_hops: int = 2
-
     class Config:
         frozen = True
 
 
-class SearchResult(BaseModel):
-    """A single search result."""
+class DocumentReference(BaseModel):
+    """A reference to a document section returned by retrieval.
 
-    chunk: Chunk
+    Instead of returning raw content, we return URLs pointing to
+    the exact section so an external agent can read the source directly.
+    """
+
+    url: str
+    document_path: str
+    section_anchor: str | None = None
+    title: str
+    section_title: str | None = None
     score: float = 0.0
+    snippet: str = ""
+    domain: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    chunk_type: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
     retrieval_mode: RetrievalMode = RetrievalMode.VECTOR
 
-    # Additional context from graph traversal
-    graph_context: list[dict[str, Any]] = Field(default_factory=list)
 
-    # Explanation of why this result matched
-    explanation: str | None = None
-
-    class Config:
-        frozen = False
-
-
-class SearchResponse(BaseModel):
-    """Response from a search query."""
+class RetrievalResponse(BaseModel):
+    """Response from a retrieval query."""
 
     query: str
-    results: list[SearchResult]
+    references: list[DocumentReference]
     total_count: int
-    retrieval_mode: RetrievalMode
-    filters_applied: SearchFilters | None = None
     processing_time_ms: float | None = None
-
-    class Config:
-        frozen = False

@@ -47,6 +47,12 @@ class Document(BaseModel):
     tags: list[str] = Field(default_factory=list)
     domain: str | None = None
 
+    # Git-aware fields
+    repo_name: str | None = None
+    relative_path: str | None = None
+    git_commit: str | None = None
+    git_remote_url: str | None = None
+
     # Processing state
     status: DocumentStatus = DocumentStatus.PENDING
     content_hash: str | None = None
@@ -80,6 +86,9 @@ class Chunk(BaseModel):
     start_offset: int | None = None
     end_offset: int | None = None
     heading_path: list[str] = Field(default_factory=list)
+
+    # Section anchor (computed from heading_path)
+    section_anchor: str | None = None
 
     # Metadata
     metadata: dict[str, Any] = Field(default_factory=dict)

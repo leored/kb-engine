@@ -11,13 +11,16 @@ from kb_engine.core.exceptions import (
 from kb_engine.core.models import (
     Chunk,
     Document,
+    DocumentReference,
     Edge,
     EdgeType,
     Embedding,
     Node,
     NodeType,
+    RetrievalMode,
+    RetrievalResponse,
+    RepositoryConfig,
     SearchFilters,
-    SearchResult,
 )
 
 __all__ = [
@@ -30,7 +33,10 @@ __all__ = [
     "NodeType",
     "EdgeType",
     "SearchFilters",
-    "SearchResult",
+    "DocumentReference",
+    "RetrievalResponse",
+    "RetrievalMode",
+    "RepositoryConfig",
     # Exceptions
     "KBPodError",
     "ConfigurationError",

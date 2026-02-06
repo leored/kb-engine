@@ -1,5 +1,5 @@
-"""Inference pipeline for query processing."""
+"""Retrieval pipeline for query processing."""
 
-from kb_engine.pipelines.inference.pipeline import InferencePipeline
+from kb_engine.pipelines.inference.pipeline import RetrievalPipeline
 
-__all__ = ["InferencePipeline"]
+__all__ = ["RetrievalPipeline"]

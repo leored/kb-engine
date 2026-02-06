@@ -1,95 +1,82 @@
-"""Main inference pipeline."""
+"""Retrieval pipeline - returns document references with URLs."""
 
 import time
 
-from kb_engine.core.interfaces.repositories import (
-    GraphRepository,
-    TraceabilityRepository,
-    VectorRepository,
-)
+import structlog
+
 from kb_engine.core.models.search import (
+    DocumentReference,
     RetrievalMode,
+    RetrievalResponse,
     SearchFilters,
-    SearchResponse,
-    SearchResult,
 )
 from kb_engine.embedding import EmbeddingConfig, EmbeddingProviderFactory
+from kb_engine.git.url_resolver import URLResolver
+from kb_engine.utils.markdown import extract_snippet, heading_path_to_anchor
+
+logger = structlog.get_logger(__name__)
 
 
-class InferencePipeline:
-    """Pipeline for processing inference queries.
+class RetrievalPipeline:
+    """Pipeline for processing retrieval queries.
 
-    Orchestrates the retrieval process:
-    1. Embed the query
-    2. Retrieve relevant chunks (vector, graph, or hybrid)
-    3. Rerank results
-    4. Return structured response
+    Returns DocumentReference objects with full URLs (including #anchors)
+    instead of raw document content. This allows external agents to
+    read the source documents directly.
     """
 
     def __init__(
         self,
-        traceability_repo: TraceabilityRepository,
-        vector_repo: VectorRepository,
-        graph_repo: GraphRepository,
+        traceability_repo,
+        vector_repo,
+        graph_repo=None,
+        url_resolver: URLResolver | None = None,
         embedding_config: EmbeddingConfig | None = None,
     ) -> None:
         self._traceability = traceability_repo
         self._vector = vector_repo
         self._graph = graph_repo
+        self._url_resolver = url_resolver
 
-        # Initialize embedding provider
         self._embedding_provider = EmbeddingProviderFactory(embedding_config).create_provider()
 
     async def search(
         self,
         query: str,
-        mode: RetrievalMode = RetrievalMode.HYBRID,
+        mode: RetrievalMode = RetrievalMode.VECTOR,
         filters: SearchFilters | None = None,
         limit: int = 10,
         score_threshold: float | None = None,
-    ) -> SearchResponse:
-        """Execute a search query.
-
-        Args:
-            query: The search query text.
-            mode: Retrieval mode (vector, graph, or hybrid).
-            filters: Optional filters to apply.
-            limit: Maximum number of results.
-            score_threshold: Minimum score threshold.
-
-        Returns:
-            SearchResponse with ranked results.
-        """
+    ) -> RetrievalResponse:
+        """Execute a retrieval query, returning document references."""
         start_time = time.time()
 
-        results: list[SearchResult] = []
+        references: list[DocumentReference] = []
 
         if mode in (RetrievalMode.VECTOR, RetrievalMode.HYBRID):
-            vector_results = await self._vector_search(
+            vector_refs = await self._vector_search(
                 query, filters, limit, score_threshold
             )
-            results.extend(vector_results)
+            references.extend(vector_refs)
 
         if mode in (RetrievalMode.GRAPH, RetrievalMode.HYBRID):
-            graph_results = await self._graph_search(query, filters, limit)
-            results.extend(graph_results)
+            graph_refs = await self._graph_search(query, filters, limit)
+            references.extend(graph_refs)
 
-        # Deduplicate and merge results if hybrid
+        # Deduplicate by URL if hybrid
         if mode == RetrievalMode.HYBRID:
-            results = self._merge_results(results, limit)
+            references = self._deduplicate_references(references, limit)
 
-        # Sort by score
-        results.sort(key=lambda r: r.score, reverse=True)
-        results = results[:limit]
+        # Sort by score descending
+        references.sort(key=lambda r: r.score, reverse=True)
+        references = references[:limit]
 
         processing_time = (time.time() - start_time) * 1000
 
-        return SearchResponse(
+        return RetrievalResponse(
             query=query,
-            results=results,
-            total_count=len(results),
-            retrieval_mode=mode,
-            filters_applied=filters,
+            references=references,
+            total_count=len(references),
             processing_time_ms=processing_time,
         )
 
@@ -99,12 +86,10 @@ class InferencePipeline:
         filters: SearchFilters | None,
         limit: int,
         score_threshold: float | None,
-    ) -> list[SearchResult]:
-        """Perform vector similarity search."""
-        # Embed the query
+    ) -> list[DocumentReference]:
+        """Perform vector similarity search and resolve to references."""
         query_vector = await self._embedding_provider.embed_text(query)
 
-        # Search vector store
         chunk_scores = await self._vector.search(
             query_vector=query_vector,
             limit=limit,
@@ -112,64 +97,80 @@ class InferencePipeline:
             score_threshold=score_threshold,
         )
 
-        # Fetch chunk details
-        results = []
+        references = []
         for chunk_id, score in chunk_scores:
             chunk = await self._traceability.get_chunk(chunk_id)
-            if chunk:
-                results.append(
-                    SearchResult(
-                        chunk=chunk,
-                        score=score,
-                        retrieval_mode=RetrievalMode.VECTOR,
-                    )
-                )
+            if not chunk:
+                continue
 
-        return results
+            document = await self._traceability.get_document(chunk.document_id)
+            if not document:
+                continue
+
+            # Resolve URL
+            anchor = chunk.section_anchor or heading_path_to_anchor(chunk.heading_path)
+            if self._url_resolver and document.relative_path:
+                url = self._url_resolver.resolve(document.relative_path, anchor)
+            elif document.source_path:
+                url = f"file://{document.source_path}"
+                if anchor:
+                    url += f"#{anchor}"
+            else:
+                url = f"doc://{document.id}"
+
+            # Build section title from heading path
+            section_title = chunk.heading_path[-1] if chunk.heading_path else None
+
+            references.append(
+                DocumentReference(
+                    url=url,
+                    document_path=document.relative_path or document.source_path or "",
+                    section_anchor=anchor,
+                    title=document.title,
+                    section_title=section_title,
+                    score=score,
+                    snippet=extract_snippet(chunk.content),
+                    domain=document.domain,
+                    tags=document.tags,
+                    chunk_type=chunk.chunk_type.value,
+                    metadata=chunk.metadata,
+                    retrieval_mode=RetrievalMode.VECTOR,
+                )
+            )
+
+        return references
 
     async def _graph_search(
         self,
         query: str,
         filters: SearchFilters | None,
         limit: int,
-    ) -> list[SearchResult]:
-        """Perform graph-based search.
-
-        TODO: Implement graph traversal search strategy.
-        """
-        # Placeholder - would implement graph traversal
+    ) -> list[DocumentReference]:
+        """Graph-based search (placeholder for future implementation)."""
         return []
 
-    def _merge_results(
+    def _deduplicate_references(
         self,
-        results: list[SearchResult],
+        references: list[DocumentReference],
         limit: int,
-    ) -> list[SearchResult]:
-        """Merge and deduplicate results from multiple sources.
-
-        Uses Reciprocal Rank Fusion (RRF) for combining scores.
-        """
-        chunk_scores: dict[str, tuple[SearchResult, float]] = {}
+    ) -> list[DocumentReference]:
+        """Deduplicate references using Reciprocal Rank Fusion."""
+        url_scores: dict[str, tuple[DocumentReference, float]] = {}
         k = 60  # RRF constant
 
-        for rank, result in enumerate(results):
-            chunk_id = str(result.chunk.id)
+        for rank, ref in enumerate(references):
             rrf_score = 1.0 / (k + rank + 1)
-
-            if chunk_id in chunk_scores:
-                existing_result, existing_score = chunk_scores[chunk_id]
-                # Combine scores and merge graph context
-                existing_result.graph_context.extend(result.graph_context)
-                chunk_scores[chunk_id] = (existing_result, existing_score + rrf_score)
+            if ref.url in url_scores:
+                existing_ref, existing_score = url_scores[ref.url]
+                url_scores[ref.url] = (existing_ref, existing_score + rrf_score)
             else:
-                chunk_scores[chunk_id] = (result, rrf_score)
+                url_scores[ref.url] = (ref, rrf_score)
 
-        # Update scores and sort
-        merged_results = []
-        for result, rrf_score in chunk_scores.values():
-            result.score = rrf_score
-            result.retrieval_mode = RetrievalMode.HYBRID
-            merged_results.append(result)
+        merged = []
+        for ref, rrf_score in url_scores.values():
+            ref.score = rrf_score
+            ref.retrieval_mode = RetrievalMode.HYBRID
+            merged.append(ref)
 
-        merged_results.sort(key=lambda r: r.score, reverse=True)
-        return merged_results[:limit]
+        merged.sort(key=lambda r: r.score, reverse=True)
+        return merged[:limit]
